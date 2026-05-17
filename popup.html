@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIChatExporter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <h1>AIChatExporter</h1>
+        <p>Export this conversation to CSV, JSON, or PDF.</p>
+      </header>
+
+      <section class="status-card">
+        <div id="status">Open a ChatGPT conversation and click an export button.</div>
+        <div id="count" class="count"></div>
+      </section>
+
+      <section class="options" aria-label="Export options">
+        <label class="checkbox-row">
+          <input id="formattedToggle" type="checkbox" checked />
+          <span>
+            <strong>Formatted export</strong>
+            <small>Fix UTF-8 mojibake like Iâ€™, clean newline artifacts, and trim spacing.</small>
+          </span>
+        </label>
+
+        <label class="field-row" for="crawlSpeed">
+          <span>
+            <strong>Load speed</strong>
+            <small>All modes verify the top; slower modes add extra verification for huge chats.</small>
+          </span>
+          <select id="crawlSpeed">
+            <option value="safe">Safe verified</option>
+            <option value="balanced" selected>Balanced verified</option>
+            <option value="fast">Fast verified</option>
+            <option value="turbo">Turbo verified</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="actions">
+        <button id="previewBtn" type="button">Preview messages</button>
+        <button id="csvBtn" type="button">Export CSV</button>
+        <button id="jsonBtn" type="button">Export JSON</button>
+        <button id="pdfBtn" type="button">Export PDF</button>
+      </section>
+
+      <section id="preview" class="preview" hidden></section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
