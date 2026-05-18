@@ -627,7 +627,7 @@ I am preparing to transfer this technical project/chat into a new ChatGPT worksp
 
 Please review the full conversation above and fill the following JSON sections so they can be used as project transfer context.
 
-````text
+```text
 Important instructions:
 
 - Use only information explicitly present in this conversation.
@@ -672,7 +672,8 @@ Return exactly this shape:
 "importantConstraints": []
 }
 }
-````
+```
+
 ---
 
 ## General conversation transfer prompt
@@ -681,8 +682,7 @@ I am preparing to transfer this conversation into a new ChatGPT workspace.
 
 Please review the full conversation above and fill the following JSON sections so they can be used as conversation transfer context.
 
-
-````text
+```text
 
 Important instructions:
 
@@ -723,7 +723,53 @@ Return exactly this shape:
 "importantConstraints": []
 }
 }
-````
+```
+
+---
+
+## Prompt to load the conversation to new ChatGpt worspace
+
+```text
+I am transferring a project from another ChatGPT workspace.
+
+The attached JSON file is a structured archive of the previous workspace conversation. Please ingest it as context for this new workspace.
+
+How to use the file:
+1. Read schemaVersion, source, exportType, projectName, chatName, exportedAt, and timezone.
+2. Read transferContext and projectSummary first. These sections contain the intended continuation context if they were filled.
+3. Then review conversations[].messages in order using each message index.
+4. Use message content as the detailed history of what happened in the previous workspace.
+
+Important rules:
+- Do not rewrite or summarize the full archive unless I ask.
+- Do not hallucinate missing goals, decisions, constraints, or next steps.
+- Treat null values as unavailable information.
+- Treat empty strings and empty arrays as placeholders.
+- Preserve all technical details, file names, implementation decisions, bugs, fixes, version changes, schemas, prompts, and commands found in the archive.
+- Continue the project from the latest relevant state.
+- When I ask follow-up questions, answer using this archive as background context.
+- If the archive does not contain enough information, say what is missing and ask a specific question.
+- If there are multiple conversations in the archive, prioritize projectSummary and transferContext first, then the most recent or most relevant conversation messages.
+
+Once you have reviewed the JSON, reply only with:
+“Context loaded. I’m ready to continue.”
+```
+
+---
+
+## Prompt to verify the ChatGpts state after context is provided
+
+```text
+Great. Based on the loaded JSON context, please give me a short checkpoint before we continue:
+
+1. What project or conversation are we continuing?
+2. What is the current objective?
+3. What decisions or constraints should you remember?
+4. What are the next best actions?
+
+Keep it concise. 1 line answer for above 4 questions
+```
+
 ---
 
 ## License
