@@ -627,6 +627,7 @@ I am preparing to transfer this technical project/chat into a new ChatGPT worksp
 
 Please review the full conversation above and fill the following JSON sections so they can be used as project transfer context.
 
+````text
 Important instructions:
 
 - Use only information explicitly present in this conversation.
@@ -671,7 +672,7 @@ Return exactly this shape:
 "importantConstraints": []
 }
 }
-
+````
 ---
 
 ## General conversation transfer prompt
@@ -679,6 +680,9 @@ Return exactly this shape:
 I am preparing to transfer this conversation into a new ChatGPT workspace.
 
 Please review the full conversation above and fill the following JSON sections so they can be used as conversation transfer context.
+
+
+````text
 
 Important instructions:
 
@@ -719,7 +723,7 @@ Return exactly this shape:
 "importantConstraints": []
 }
 }
-
+````
 ---
 
 ## License
