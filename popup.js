@@ -4,6 +4,7 @@ const previewEl = document.getElementById("preview");
 const previewBtn = document.getElementById("previewBtn");
 const csvBtn = document.getElementById("csvBtn");
 const jsonBtn = document.getElementById("jsonBtn");
+const mdBtn = document.getElementById("mdBtn");
 const pdfBtn = document.getElementById("pdfBtn");
 const formattedToggle = document.getElementById("formattedToggle");
 const crawlSpeed = document.getElementById("crawlSpeed");
@@ -76,6 +77,7 @@ function setLoading(isLoading) {
   previewBtn.disabled = isLoading;
   csvBtn.disabled = isLoading;
   jsonBtn.disabled = isLoading;
+  if (mdBtn) mdBtn.disabled = isLoading;
   pdfBtn.disabled = isLoading;
   if (crawlSpeed) crawlSpeed.disabled = isLoading;
   if (formattedToggle) formattedToggle.disabled = isLoading;
@@ -212,6 +214,7 @@ function getPreparedMessages(messages) {
   return messages.map((message) => ({
     ...message,
     content: formatContent(message.content),
+    markdown: message.markdown ? formatContent(message.markdown) : "",
     html: message.html ? repairMojibake(message.html).replace(/\\n\\/g, "\n").replace(/\\n/g, "\n") : ""
   }));
 }
@@ -221,86 +224,179 @@ function escapeCsv(value) {
   return `"${safeValue.replace(/"/g, '""')}"`;
 }
 
-function buildQuestionAnswerPairs(messages) {
-  const pairs = [];
-  let currentQuestion = null;
+function padNumber(value, width = 3) {
+  return String(value).padStart(width, "0");
+}
 
-  for (const message of messages) {
-    const role = message.role === "assistant" ? "agent" : message.role;
-
-    if (message.role === "user") {
-      if (currentQuestion) {
-        pairs.push({
-          question: currentQuestion,
-          answer: { role: "agent", content: "" }
-        });
-      }
-
-      currentQuestion = { role: "user", content: message.content };
-      continue;
-    }
-
-    if (message.role === "assistant") {
-      if (!currentQuestion) {
-        pairs.push({
-          question: { role: "user", content: "" },
-          answer: { role, content: message.content }
-        });
-      } else {
-        pairs.push({
-          question: currentQuestion,
-          answer: { role, content: message.content }
-        });
-        currentQuestion = null;
-      }
-    }
+function getLocalTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
   }
+}
 
-  if (currentQuestion) {
-    pairs.push({
-      question: currentQuestion,
-      answer: { role: "agent", content: "" }
-    });
-  }
+function getMessageContentForArchive(message) {
+  // Prefer Markdown reconstructed from the ChatGPT DOM so code blocks, links,
+  // lists, and headings remain useful when imported into a new workspace.
+  const markdown = message.markdown || "";
+  return markdown.trim() ? markdown : (message.content || "");
+}
 
-  return pairs.map((pair, index) => ({
+function buildConversationArchive(messages, metadata) {
+  const exportedAt = new Date().toISOString();
+  const title = metadata?.chatName || "ChatGPT Conversation";
+  const sourceUrl = metadata?.sourceUrl || null;
+  const archiveMessages = messages.map((message, index) => ({
+    id: `msg-${padNumber(index + 1)}`,
     index: index + 1,
-    question: pair.question,
-    answer: pair.answer
+    role: message.role === "assistant" ? "assistant" : message.role,
+    createdAt: message.createdAt || null,
+    content: getMessageContentForArchive(message)
   }));
+
+  const conversation = {
+    id: "chat-001",
+    index: 1,
+    title,
+    createdAt: metadata?.createdAt || null,
+    updatedAt: metadata?.updatedAt || null,
+    sourceUrl,
+    tags: ["chrome-extension", "export", "chatgpt"],
+    summary: "",
+    messages: archiveMessages
+  };
+
+  return {
+    schemaVersion: "1.0",
+    source: "ChatGPT",
+    exportType: "workspace_project_transfer",
+    projectName: metadata?.projectName || "",
+    chatName: title,
+    pageTitle: metadata?.pageTitle || "",
+    isProjectChat: Boolean(metadata?.isProjectChat),
+    exportedAt,
+    timezone: getLocalTimezone(),
+    conversationCount: 1,
+    transferContext: {
+      purpose: "Provide context from the old workspace so this project can continue in a new workspace.",
+      howToUse: "Use projectSummary first. Refer to conversations only when detailed history is needed.",
+      currentObjective: "",
+      knownFacts: [],
+      decisionsMade: [],
+      nextActions: []
+    },
+    projectSummary: {
+      goal: "",
+      currentStatus: "",
+      keyDecisions: [],
+      openQuestions: [],
+      importantConstraints: []
+    },
+    conversations: [conversation]
+  };
 }
 
 function buildCsv(messages, metadata) {
-  const pairs = buildQuestionAnswerPairs(messages);
-  const metadataRows = [
-    ["source", "ChatGPT"],
-    ["projectName", metadata?.projectName || ""],
-    ["chatName", metadata?.chatName || "ChatGPT Conversation"],
-    ["pageTitle", metadata?.pageTitle || ""],
-    ["exportedAt", new Date().toISOString()],
-    ["pairCount", pairs.length]
-  ].map((row) => row.map(escapeCsv).join(","));
+  const archive = buildConversationArchive(messages, metadata);
+  const header = [
+    "conversationIndex",
+    "conversationId",
+    "conversationTitle",
+    "projectName",
+    "chatName",
+    "messageIndex",
+    "messageId",
+    "role",
+    "content",
+    "createdAt",
+    "updatedAt",
+    "sourceUrl",
+    "exportedAt"
+  ].map(escapeCsv).join(",");
 
-  const header = ["index", "question", "answer"].map(escapeCsv).join(",");
-  const rows = pairs.map((pair) =>
-    [pair.index, pair.question.content, pair.answer.content].map(escapeCsv).join(",")
-  );
-  return [...metadataRows, "", header, ...rows].join("\n");
+  const rows = [];
+
+  archive.conversations.forEach((conversation) => {
+    conversation.messages.forEach((message) => {
+      rows.push([
+        conversation.index,
+        conversation.id,
+        conversation.title,
+        archive.projectName,
+        archive.chatName,
+        message.index,
+        message.id,
+        message.role,
+        message.content,
+        message.createdAt,
+        conversation.updatedAt,
+        conversation.sourceUrl,
+        archive.exportedAt
+      ].map(escapeCsv).join(","));
+    });
+  });
+
+  return [header, ...rows].join("\n");
 }
 
 function buildJson(messages, metadata) {
-  const pairs = buildQuestionAnswerPairs(messages);
+  return JSON.stringify(buildConversationArchive(messages, metadata), null, 2);
+}
 
-  return JSON.stringify({
-    source: "ChatGPT",
-    projectName: metadata?.projectName || "",
-    chatName: metadata?.chatName || "ChatGPT Conversation",
-    pageTitle: metadata?.pageTitle || "",
-    isProjectChat: Boolean(metadata?.isProjectChat),
-    exportedAt: new Date().toISOString(),
-    pairCount: pairs.length,
-    conversations: pairs
-  }, null, 2);
+function markdownValue(value, fallback = "null") {
+  if (value === null || value === undefined || value === "") return fallback;
+  return String(value);
+}
+
+function buildProjectContextMarkdown(messages, metadata) {
+  const archive = buildConversationArchive(messages, metadata);
+  const projectName = archive.projectName || archive.chatName || "ChatGPT Project";
+  const conversation = archive.conversations[0];
+  const lines = [];
+
+  lines.push(`# Project Context Archive: ${projectName}`);
+  lines.push("");
+  lines.push(`Exported: ${archive.exportedAt}  `);
+  lines.push(`Source: ${archive.source}  `);
+  lines.push("Workspace Transfer Purpose: Provide project context in a new ChatGPT workspace.");
+  lines.push("");
+  lines.push("## Project Summary");
+  lines.push("");
+  lines.push("The section below is intentionally left as a placeholder. The user can manually update it after export.");
+  lines.push("");
+  lines.push("### Goal");
+  lines.push("[Manually add project goal here]");
+  lines.push("");
+  lines.push("### Current Status");
+  lines.push("[Manually add current status here]");
+  lines.push("");
+  lines.push("### Key Decisions");
+  lines.push("- [Manually add key decisions here]");
+  lines.push("");
+  lines.push("### Open Questions");
+  lines.push("- [Manually add open questions here]");
+  lines.push("");
+  lines.push("### Important Constraints");
+  lines.push("- [Manually add important constraints here]");
+  lines.push("");
+  lines.push("## Conversations");
+  lines.push("");
+  lines.push(`### Conversation ${conversation.index}: ${conversation.title}`);
+  lines.push("");
+  lines.push(`Created: ${markdownValue(conversation.createdAt)}  `);
+  lines.push(`Updated: ${markdownValue(conversation.updatedAt)}  `);
+  lines.push(`Source URL: ${markdownValue(conversation.sourceUrl)}`);
+  lines.push("");
+
+  for (const message of conversation.messages) {
+    const label = message.role === "assistant" ? "Assistant" : message.role.charAt(0).toUpperCase() + message.role.slice(1);
+    lines.push(`#### ${label}`);
+    lines.push(markdownValue(message.content, ""));
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 function escapeHtml(value) {
@@ -669,13 +765,18 @@ previewBtn.addEventListener("click", () => withMessages(async (messages) => {
 }));
 
 csvBtn.addEventListener("click", () => withMessages(async (messages, metadata) => {
-  downloadFile(buildFilename(metadata, "csv"), "text/csv;charset=utf-8", buildCsv(messages, metadata), { addBom: true });
-  setStatus("CSV export created.");
+  downloadFile("conversation-messages.csv", "text/csv;charset=utf-8", buildCsv(messages, metadata), { addBom: true });
+  setStatus("CSV message export created.");
 }));
 
 jsonBtn.addEventListener("click", () => withMessages(async (messages, metadata) => {
-  downloadFile(buildFilename(metadata, "json"), "application/json;charset=utf-8", buildJson(messages, metadata), { addBom: true });
-  setStatus("JSON export created.");
+  downloadFile("conversations.json", "application/json;charset=utf-8", buildJson(messages, metadata), { addBom: true });
+  setStatus("JSON workspace-transfer archive created.");
+}));
+
+mdBtn?.addEventListener("click", () => withMessages(async (messages, metadata) => {
+  downloadFile("project-context.md", "text/markdown;charset=utf-8", buildProjectContextMarkdown(messages, metadata), { addBom: true });
+  setStatus("Markdown project context export created.");
 }));
 
 pdfBtn.addEventListener("click", () => withMessages(async (messages, metadata) => {

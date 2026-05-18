@@ -46,7 +46,8 @@ function getChatTitleMetadata() {
         pageTitle: rawTitle,
         projectName,
         chatName,
-        isProjectChat: true
+        isProjectChat: true,
+        sourceUrl: location.href || null
       };
     }
   }
@@ -55,7 +56,8 @@ function getChatTitleMetadata() {
     pageTitle: rawTitle,
     projectName: "",
     chatName: cleanedTitle,
-    isProjectChat: false
+    isProjectChat: false,
+    sourceUrl: location.href || null
   };
 }
 
@@ -206,6 +208,72 @@ function getHtmlFromMessageElement(element) {
     .trim();
 }
 
+function markdownEscape(value) {
+  return String(value ?? "");
+}
+
+function getCodeLanguageForMarkdown(preElement) {
+  const language = getCodeLanguage(preElement);
+  return /^code$/i.test(language) ? "" : language.toLowerCase();
+}
+
+function nodeToMarkdown(node, context = {}) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return markdownEscape(node.textContent || "");
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const tag = node.tagName.toLowerCase();
+  if (["script", "style", "noscript", "button", "svg"].includes(tag)) return "";
+  if (tag === "br") return "\n";
+
+  if (tag === "pre") {
+    const codeElement = node.querySelector("pre.cm-content code, .cm-content code, code") || node.querySelector("code");
+    const codeText = textFromCodeElement(codeElement) || (node.innerText || node.textContent || "").trimEnd();
+    const language = getCodeLanguageForMarkdown(node);
+    return `\n\n\`\`\`${language}\n${codeText}\n\`\`\`\n\n`;
+  }
+
+  if (tag === "code") {
+    return `\`${(node.textContent || "").replace(/`/g, "\\`")}\``;
+  }
+
+  const children = [...node.childNodes].map((child) => nodeToMarkdown(child, context)).join("");
+
+  if (tag === "p") return `${children.trim()}\n\n`;
+  if (["strong", "b"].includes(tag)) return `**${children}**`;
+  if (["em", "i"].includes(tag)) return `*${children}*`;
+  if (tag === "blockquote") return children.trim().split("\n").map((line) => `> ${line}`).join("\n") + "\n\n";
+  if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) return `${"#".repeat(Number(tag[1]))} ${children.trim()}\n\n`;
+  if (tag === "a") {
+    const href = node.getAttribute("href") || "";
+    const text = children.trim() || href;
+    return href ? `[${text}](${href})` : text;
+  }
+  if (tag === "li") {
+    const marker = context.ordered ? `${context.index || 1}.` : "-";
+    return `${marker} ${children.trim()}\n`;
+  }
+  if (tag === "ul") return "\n" + [...node.children].map((child) => nodeToMarkdown(child, { ordered: false })).join("") + "\n";
+  if (tag === "ol") return "\n" + [...node.children].map((child, index) => nodeToMarkdown(child, { ordered: true, index: index + 1 })).join("") + "\n";
+  if (tag === "table") return `${normalizeText(node.innerText || node.textContent || "")}\n\n`;
+
+  return children;
+}
+
+function getMarkdownFromMessageElement(element) {
+  const clone = element.cloneNode(true);
+  removeNoise(clone);
+
+  const contentNodes = [...clone.querySelectorAll(".markdown, [data-message-content], .whitespace-pre-wrap")]
+    .filter((node) => normalizeText(node.innerText || node.textContent || ""));
+  const roots = contentNodes.length ? contentNodes : [clone];
+
+  return normalizeText(roots
+    .map((node) => [...node.childNodes].map((child) => nodeToMarkdown(child)).join(""))
+    .join("\n\n"));
+}
+
 function getMessageId(element) {
   return element.getAttribute("data-message-id") || element.getAttribute("data-chat-bookmark-id") || "";
 }
@@ -241,7 +309,8 @@ function extractRawMessageBlocks() {
     if (id) seenIds.add(id);
 
     const html = getHtmlFromMessageElement(node);
-    rawMessages.push({ id, role, content, html });
+    const markdown = getMarkdownFromMessageElement(node);
+    rawMessages.push({ id, role, content, html, markdown });
   }
 
   return rawMessages;
@@ -360,9 +429,12 @@ function mergeConsecutiveMessagesByRole(messages) {
         if (message.html) {
           previous.html = [previous.html, message.html].filter(Boolean).join("\n");
         }
+        if (message.markdown) {
+          previous.markdown = [previous.markdown, message.markdown].filter(Boolean).join("\n\n");
+        }
       }
     } else {
-      merged.push({ role: message.role, content, html: message.html || "" });
+      merged.push({ role: message.role, content, html: message.html || "", markdown: message.markdown || content });
     }
   }
 

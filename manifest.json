@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
   "name": "AIChatExporter",
-  "version": "1.0.0",
-  "description": "Export ChatGPT conversations as structured question/answer pairs to CSV, JSON, or styled PDF.",
-  "permissions": ["activeTab", "scripting"],
-  "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+  "version": "1.0.1",
+  "description": "Export ChatGPT conversations as workspace-transfer JSON, Markdown context, CSV index, or styled PDF with verified auto-scroll and syntax-highlighted code blocks.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
   "action": {
     "default_title": "AIChatExporter",
     "default_popup": "popup.html",
@@ -17,8 +23,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
